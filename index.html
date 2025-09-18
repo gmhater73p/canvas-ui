@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  
+  <head>
+    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+  </head>
+  
+  <body style="margin: 0;overflow: hidden;">
+    
+    <canvas id="main" style="width: 100%; height: 100%;"></canvas>
+    
+    <script type="module">
+      import * as ui from "./core.js";
+      import * as foundation from "./foundation.js";
+      
+      const canvas = document.getElementById("main");
+      const context = canvas.getContext("2d", { desynchronized: true, alpha: false });
+      
+      const UIRoot = new ui.UIObject();
+      
+      let previousRect = null;
+      for (var i = 0; i < 2048; i++) {
+        const rect = new foundation.Frame();
+        rect.size = previousRect ? new ui.UICoordinate(1, 1) : new ui.UICoordinate(0, 70, 0, 70);
+        rect.position = new ui.UICoordinate(0, 20, 0, 20);
+        if (!previousRect) rect.anchorPoint = new ui.UICoordinate(0.5, 0.5);
+        rect.borderRadius = new ui.Float4(35, 8, 35, 8);
+        rect.backgroundFill = `rgba(${Math.random() * 200}, ${Math.random() * 200}, ${Math.random() * 200}, 0.5)`;
+        previousRect ? previousRect.appendUIObject(rect) : UIRoot.appendUIObject(rect);
+        previousRect = rect;
+      }
+      previousRect = null;
+      for (var i = 0; i < 2048; i++) {
+        const label = new foundation.TextLabel();
+        label.size = previousRect ? new ui.UICoordinate(1, 1) : new ui.UICoordinate(0, 80, 0, 60);
+        label.position = new ui.UICoordinate(0, 0, 0, -65);
+        label.borderRadius = new ui.Float4(6);
+        label.backgroundFill = `rgba(${Math.random() * 200}, ${Math.random() * 200}, ${Math.random() * 200}, 0.5)`;
+        //label.text = "TextLabel";
+        previousRect ? previousRect.appendUIObject(label) : UIRoot.children[0].appendUIObject(label);
+        previousRect = label;
+      }
+      
+      const labelScaled = new foundation.TextLabel();
+      labelScaled.size = new ui.UICoordinate(0.2, 0.2);
+      labelScaled.position = new ui.UICoordinate(0.5, 0, 0.5, 0);
+      labelScaled.anchorPoint = new ui.UICoordinate(0.5, 0.5);
+      labelScaled.backgroundFill = "rgba(200, 0, 0, 0.5)";
+      //labelScaled.text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Enim nunc faucibus a pellentesque sit amet porttitor. At erat pellentesque adipiscing commodo elit. Sed turpis tincidunt id aliquet. Nunc sed velit dignissim sodales ut eu sem integer vitae. Fermentum et sollicitudin ac orci. Dignissim sodales ut eu sem integer vitae justo eget magna. Elit at imperdiet dui accumsan sit. Egestas purus viverra accumsan in nisl. Eu nisl nunc mi ipsum. Id volutpat lacus laoreet non curabitur. Nulla facilisi nullam vehicula ipsum a arcu cursus vitae. Arcu odio ut sem nulla pharetra.";
+      labelScaled.appendUIModifier(new foundation.ShadowEffect());
+      UIRoot.appendUIObject(labelScaled);
+      const rectCentered = new foundation.Frame();
+      rectCentered.size = new ui.UICoordinate(0, 20, 0, 20);
+      rectCentered.position = new ui.UICoordinate(0.5, 0, 0.5, 0);
+      rectCentered.anchorPoint = new ui.UICoordinate(0.5, 0.5);
+      rectCentered.backgroundFill = "green";
+      rectCentered.appendUIModifier(new foundation.ShadowEffect());
+      labelScaled.appendUIObject(rectCentered);
+      
+      addEventListener("mousemove", e => UIRoot.children[0].position = new ui.UICoordinate(0, e.clientX, 0, e.clientY));
+      addEventListener("touchmove", e => {
+        e.preventDefault();
+        UIRoot.children[0].position = new ui.UICoordinate(0, e.touches[0].clientX, 0, e.touches[0].clientY);
+      }, { passive: false });
+      
+      function updateCanvas() {
+        canvas.absoluteWidth = window.innerWidth;
+        canvas.absoluteHeight = window.innerHeight;
+        canvas.width = Math.floor(canvas.absoluteWidth * window.devicePixelRatio);
+        canvas.height = Math.floor(canvas.absoluteHeight * window.devicePixelRatio);
+        UIRoot.absoluteSize = new ui.Position2D(canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
+        context.scale(window.devicePixelRatio, window.devicePixelRatio);
+        for (const child of UIRoot.children) ui.UIObject.addToRelayout(child);
+      }
+      updateCanvas();
+      addEventListener("resize", updateCanvas);
+      
+      function iterativeEvents(UIObject) {
+        for (const child of UIObject.children) {
+          if (child.visible) {
+            if (child.active) {
+              // run events
+            } else iterativeEvents(child);
+          }
+        }
+      }
+      
+      function iterativeDraw(UIObject) {
+        if (UIObject.visible) {
+          if (UIObject.absolutePosition.x < canvas.absoluteWidth && UIObject.absolutePosition.y < canvas.absoluteHeight && UIObject.absolutePosition.x + UIObject.absoluteSize.x > 0 && UIObject.absolutePosition.y + UIObject.absoluteSize.y > 0) {
+            for (const UIModifier of UIObject.modifiers) if (UIModifier.enabled && UIModifier.drawBefore) UIModifier.drawBefore(context);
+            UIObject.draw(context);
+            for (const UIModifier of UIObject.modifiers) if (UIModifier.enabled && UIModifier.drawAfter) UIModifier.drawAfter(context);
+            for (const child of [...UIObject.children].sort((a, b) => a.zIndex - b.zIndex)) iterativeDraw(child);
+          } else if (!UIObject.clip) for (const child of [...UIObject.children].sort((a, b) => a.zIndex - b.zIndex)) iterativeDraw(child);
+        }
+      }
+      
+      function iterativeDrawDebugGetObjects(UIObject) {
+        let visible = 0;
+        let total = 1;
+        if (UIObject.visible && UIObject.absolutePosition.x < canvas.absoluteWidth && UIObject.absolutePosition.y < canvas.absoluteHeight && UIObject.absolutePosition.x + UIObject.absoluteSize.x > 0 && UIObject.absolutePosition.y + UIObject.absoluteSize.y > 0) {
+          visible++;
+          for (let i = 0; i < UIObject.children.length; i++) { const result = iterativeDrawDebugGetObjects(UIObject.children[i]); visible += result[0]; total += result[1]; }
+        } else for (let i = 0; i < UIObject.children.length; i++) { const result = iterativeDrawDebugGetObjects(UIObject.children[i]); if (!UIObject.clip) visible += result[0]; total += result[1]; }
+        return [visible, total];
+      }
+      function iterativeRelayoutCheckDebug(object) {
+        let value = 1;
+        for (const child of object.children) value += iterativeRelayoutCheckDebug(child);
+        return value;
+      }
+      
+      class performanceWatcher {
+        #data = new Map();
+        #recording = new Map();
+        colors = new Map();
+        
+        start(key) { if (!this.#data.has(key)) this.#data.set(key, [0, 0, 0, 0, 0]); this.#recording.set(key, performance.now()); if (!this.colors.has(key)) this.colors.set(key, `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`); }
+        end(key) {
+          key = (key === undefined && this.#recording.size > 0) ? this.#recording.keys().next().value : key;
+          const array = this.#data.get(key);
+          if (this.#recording.has(key)) { array.push(performance.now() - this.#recording.get(key)); array.shift(); }
+          this.#recording.delete(key);
+        }
+        get(key) { return this.#data.get(key); }
+        forEach(callback) { for (const [key, value] of this.#data) callback(key, value.reduce((a, b) => a + b) / value.length); }
+        delete(key) { this.#data.delete(key); this.#recording.delete(key); }
+        clear() { this.#data.clear(); this.#recording.clear(); }
+        get size() { return this.#data.size; }
+      }
+      
+      const frameTimes = [];
+      const perfWatcher = new performanceWatcher();
+      function update(timestamp) {
+        while (frameTimes.length > 0 && frameTimes[0] <= timestamp - 1000) frameTimes.shift(); frameTimes.push(timestamp);
+        
+        const fps = frameTimes.length;
+        const frameDelta = 1000 / fps;
+        
+        context.fillStyle = "white";
+        context.fillRect(0, 0, canvas.absoluteWidth, canvas.absoluteHeight);
+        
+        perfWatcher.start("events");
+        iterativeEvents(UIRoot);
+        perfWatcher.end();
+        
+        perfWatcher.start("layoutDebug");
+        context.fillStyle = "black";
+        for (const object of relayout) context.fillRect(object.absolutePosition.x, object.absolutePosition.y, object.absoluteSize.x, object.absoluteSize.y);
+        perfWatcher.end();
+        
+        perfWatcher.start("layout");
+        for (const object of relayout) ui.layout(object);
+        perfWatcher.end();
+        
+        perfWatcher.start("draw");
+        iterativeDraw(UIRoot);
+        perfWatcher.end();
+        
+        perfWatcher.start("profilerGetObjects");
+        const [visibleObjects, totalObjects] = iterativeDrawDebugGetObjects(UIRoot);
+        perfWatcher.end();
+        
+        perfWatcher.start("drawProfiler");
+        const performanceGraphWidth = Math.max(Math.min(canvas.width - 20, 480), 280);
+        
+        context.fillStyle = "black";
+        context.fillRect(10, 10, performanceGraphWidth, perfWatcher.size * 20 + 72 + 20);
+        context.font = "12px Segoe UI, system-ui"; context.textBaseline = "top"; context.textAlign = "start";
+        context.fillStyle = "white";
+        context.fillText(`Draw | ${fps} FPS | ${frameDelta.toFixed(2)} ms`, 20, 20);
+        context.textAlign = "right"; context.fillText(`Rendering ${visibleObjects - 1} of ${totalObjects - 1} objects`, performanceGraphWidth, 20); context.textAlign = "start";
+        
+        context.fillRect(20, 40, performanceGraphWidth - 20, 30);
+        
+        let [x, y] = [20, 80];
+        perfWatcher.forEach((key, value) => {
+          context.fillStyle = perfWatcher.colors.get(key);
+          context.fillRect(x, 40, (performanceGraphWidth - 20) * (value / frameDelta), 30);
+          x += (performanceGraphWidth - 20) * (value / frameDelta);
+          context.fillRect(20, y, 14, 14);
+          context.fillStyle = "white";
+          context.fillText(`${key} | ${value.toFixed(2)} ms | ${Math.floor(value / frameDelta * 100)}%`, 40, y + 2);
+          y += 20;
+        });
+        context.fillRect(20, y, 14, 14);
+        context.fillText(`${(frameDelta - x / (performanceGraphWidth - 20) * frameDelta).toFixed(2)} ms | ${Math.floor((frameDelta - x / (performanceGraphWidth - 20) * frameDelta) / frameDelta * 100)}%`, 40, y + 2);
+        perfWatcher.end();
+        
+        perfWatcher.start("drawLayoutProfiler");
+        if (relayout.length > 0) {
+          context.fillStyle = "black";
+          context.fillRect(10, perfWatcher.size * 20 + 72 + 40, performanceGraphWidth, 30);
+          context.fillStyle = "white";
+          let total = 0;
+          for (const object of relayout) total += iterativeRelayoutCheckDebug(object);
+          context.fillText(`Relayout ${relayout.length} objects. Total ${total + relayout.length}.`, 20, perfWatcher.size * 20 + 72 + 50);
+        }
+        perfWatcher.end();
+        
+        relayout = [];
+        
+        requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+      
+      window.UIRoot = UIRoot; window.context = context; window.perfWatcher = perfWatcher;
+    </script>
+    
+  </body>
+  
+</html>
